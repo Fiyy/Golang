@@ -94,7 +94,7 @@ var c complex64 = 5+5i
 fmt.Printf("Value is: %v", c)
 ```
 
-- 字符串类型string，Go中都使用`UTF-8`,可以用双引号或者反引号（我的键盘是esc下面的1左边的按键）来括起来。
+- 字符串类型string，Go中都使用`UTF-8`,可以用双引号或者反引号（我的键盘是esc下面的1左边的按键）来括起来。字符串的底层物理数据结构还是字节数组，在赋值的时候其实只修改了数据首地址和长度。
 - 字符串的值是不能改变的，如果想要改变，首先将字符串转换为[]byte的数组，然后用数组的方式进行下标选择修改，然后在转换为string
 
 ```go
@@ -113,3 +113,4 @@ s = "c" + s[1:] // 字符串虽不能更改，但可进行切片操作
 fmt.Printf("%s\n", s)
 ```
 
+![img](https://chai2010.gitbooks.io/advanced-go-programming-book/content/images/ch1-7-array-4int.ditaa.png)

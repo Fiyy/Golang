@@ -95,17 +95,18 @@ fmt.Printf("Value is: %v", c)
 ```
 
 - 字符串类型string，Go中都使用`UTF-8`,可以用双引号或者反引号（我的键盘是esc下面的1左边的按键）来括起来。字符串的底层物理数据结构还是字节数组，在赋值的时候其实只修改了数据首地址和长度。
-- 字符串的值是不能改变的，如果想要改变，首先将字符串转换为[]byte的数组，然后用数组的方式进行下标选择修改，然后在转换为string
+- 字符串的值是不能改变的，如果想要改变，首先将字符串转换为[]byte的数组，然后用数组的方式进行下标选择修改，然后在转换为string。这里的修改其实是指变量名指向的字符串的修改，而不是字符串变量名称对应的字符串不能改变，你完全可以使用赋值语句重新赋值，这一点和Java中的String相同。
 
 ```go
 s := "hello"
+// 这里可以使用 s = "asdf"来修改字符串
 c := []byte(s)  // 将字符串 s 转换为 []byte 类型
 c[0] = 'c'
 s2 := string(c)  // 再转换回 string 类型
 fmt.Printf("%s\n", s2)
 ```
 
-​	还有一种修改字符串的方式，用切片来操作（不知道为啥感觉有点没有道理，这不就还是强行改变啦字符串的内容？？？
+​	还有一种修改字符串的方式，用切片来操作（其实也就是对这个字符串进行一个重新的赋值，字符串变量名将会指向另一个地址而不是最初的地址）
 
 ```go
 s := "hello"
@@ -113,4 +114,48 @@ s = "c" + s[1:] // 字符串虽不能更改，但可进行切片操作
 fmt.Printf("%s\n", s)
 ```
 
-![img](https://chai2010.gitbooks.io/advanced-go-programming-book/content/images/ch1-7-array-4int.ditaa.png)
+- 可以使用 `+` 来连接两个字符串
+- 如果要声明一个多行的字符串，可以用反引号来声明，反引号括起来的内容是**Raw字符串**，即在代码中的样子就是实际打印的形式，没有字符转义
+
+#### 错误类型
+
+- Go中内置来`error` 类型，可处理错误信息，可以通过`errors` 包中的函数来处理错误，编辑错误信息
+
+```go
+err := errors.New("emit macho dwarf: elf header corrupted")
+if err != nil {
+	fmt.Print(err)
+}
+```
+
+#### iota 枚举
+
+在使用声明`enum` 时采用，默认开始值为0，好像只能被常量使用？？
+
+```go
+const (
+	x = iota // x == 0
+	y = iota // y == 1
+	z = iota // z == 2
+	w        // 常量声明省略值时，默认和之前一个值的字面相同。这里隐式地说w = iota，因此w == 3。其实上面y和z可同样不用"= iota"
+)
+
+const v = iota // 每遇到一个const关键字，iota就会重置，此时v == 0
+
+const (
+	h, i, j = iota, iota, iota //h=0,i=0,j=0 iota在同一行值相同
+)
+
+const (
+	a       = iota //a=0
+	b       = "B"
+	c       = iota             //c=2
+	d, e, f = iota, iota, iota //d=3,e=3,f=3
+	g       = iota             //g = 4
+)
+```
+
+可以看出两点：
+
+- 每次遇到const关键字时，iota的值归零
+- 每一次换行都会增加1，相同一行的iota值是相等的

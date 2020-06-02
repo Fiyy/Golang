@@ -1,5 +1,7 @@
 # Go学习笔记
 
+[TOC]
+
 ## The tour of Go 笔记
 
 - := 在函数外不可用
@@ -19,6 +21,8 @@
 ## Go语言基础
 
 [github Go学习]: https://github.com/astaxie/build-web-application-with-golang/blob/master/zh/preface.md
+
+该学习笔记基于[教程](https://github.com/astaxie/build-web-application-with-golang) ，推荐所有go语言学习者学习。
 
 ### 2.0 Go语言总述
 
@@ -320,3 +324,202 @@ string  ""
 ```
 
 ### 2.3 流程和函数
+
+#### 流程控制
+
+- if 语句不用加括号，if语句中可以声明一个变量，该变量只在条件逻辑块内起作用
+- goto跳转到标签处，谨慎使用
+- for语句，不需要使用括号，可以当做while使用，只有一个条件语句，省去两个`;`
+
+- break 和 continue 语句和C语言中相同
+- 可以使用for 配合 range使用来读取slice和map中的数据，返回第一个值为key，第二个为value
+
+```go
+for k,v:=range map {
+	fmt.Println("map's key:",k)
+	fmt.Println("map's val:",v)
+}
+```
+
+- switch 语句的表达式可以不是整数或者常量，与C语言的switch的区别在于执行一个case后自动跳出，相当于每个case中自带来break语句
+- switch语句中可以在case语句中使用`fallthrough`来强行执行后面的case代码，如下：
+
+```go
+integer := 6
+switch integer {
+case 4:
+	fmt.Println("The integer was <= 4")
+	fallthrough
+case 5:
+	fmt.Println("The integer was <= 5")
+	fallthrough
+case 6:
+	fmt.Println("The integer was <= 6")
+	fallthrough
+default:
+	fmt.Println("default case")
+}
+```
+
+- 如果switch没有表达式，则会匹配`true`的情况，类似于条件语句
+
+```go
+	x := 5
+	switch {
+	case x <= 4:
+		fmt.Println("The integer was <= 4")
+	case x <= 5:
+		fmt.Println("The integer was <= 5")
+	case x <= 6:
+		fmt.Println("The integer was <= 6")
+	default:
+		fmt.Println("default case")
+	}
+```
+
+#### 函数
+
+函数是用func来声明的，格式如下：
+
+```go
+func funcName(input1 type1, input2 type2) (output1 type1, output2 type2) {
+	//这里是处理逻辑代码
+	//返回多个值
+	return value1, value2
+}
+```
+
+- 可以有多个传入参数，也可以有多个返回值，都要在参数后带有类型，返回值可以不给变量名只给类型,例如：
+
+```go
+func func0(input1, input2 int) (x, y int) {
+	x = input1
+	y = input2
+	return
+}
+```
+
+- 如果返回值有变量名，可以直接在函数内使用该变量，在返回的时候用`return` 语句可以不说明变量名
+- 如果只有一个返回值而且不声明返回值变量，可以直接省略掉括号写法如下：
+
+```go
+func func1(input1 int, input2 int) int {
+	return input1 + input2
+}
+```
+
+- 如果几个传入参数的类型一样，只需要在最后一个传入参数处注明类型
+
+```
+func func2(input1, input2 int) int {
+	return input1 + input2
+}
+```
+
+#### 可变参数
+
+Go支持可变参数，用 `xxx...type`来构成，代码如下：
+
+```go
+func myfunc(arg ...int) {}
+for _, n := range arg {
+	fmt.Printf("And the number is: %d\n", n)
+}
+```
+
+#### 函数传参的传值与传指针
+
+- 传值就是传了一个copy值
+- 传指针，指针指向存储空间，在函数内直接操作存储空间，在函数中的操作会影响传入参数的值
+- go中的指针可以直接使用`.` 来操作结构
+
+**传指针的好处：**
+
+- 可以实际修改对象，操作同一个对象
+- 传指针只需要传一个地址值，对于操作对象是一个较大的结构体时，开销较小
+- channel、slice、map这三种类型的实现类似指针，因此可以直接传递，实际效果和传递指针相同，**但是如果想要改变slice的长度，还是需要取地址传递指针**
+
+#### defer
+
+defer语句用作延迟效果，如果在一个函数中使用defer语句，会在函数执行到最后时，将这些defer语句逆序执行，然后函数返回。
+
+defer语句作用：当在进行一些资源打开操作时，如果遇到错误，需要提前返回，但是返回前必须要关闭相应的资源，不然会导致资源泄露，所以就需要执行defer语句。
+
+```go
+func ReadWrite() bool {
+	file.Open("file")
+	defer file.Close()
+	if failureX {
+		return false
+	}
+	if failureY {
+		return false
+	}
+	return true
+}
+```
+
+- 注意：defer是在函数返回前**逆序执行**，采用先进后出的栈，这个特性才能释放资源！
+
+#### 函数作为值、类型
+
+go中的函数可以作为一个类型，它的类型就是所有拥有相同的参数（个数和类型相同），相同的返回值（个数和类型相同）的一种类型，但是函数内部不一定相同，那么函数作为类型的作用是什么？就是可以将函数当做值来传递，如下面的代码：
+
+```go
+package main
+import "fmt"
+
+type testInt func(int) bool // 声明了一个函数类型，类型名字是testInt
+
+func isOdd(integer int) bool { 
+	if integer%2 == 0 {
+		return false
+	}
+	return true
+}
+
+func isEven(integer int) bool {
+	if integer%2 == 0 {
+		return true
+	}
+	return false
+}
+
+// 声明的函数类型在这个地方当做了一个参数
+
+func filter(slice []int, f testInt) []int { // 这里的f就是函数，作为值传入该函数
+	var result []int
+	for _, value := range slice {
+		if f(value) {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+func main(){
+	slice := []int {1, 2, 3, 4, 5, 7}
+	fmt.Println("slice = ", slice)
+	odd := filter(slice, isOdd)    // 函数当做值来传递了
+	fmt.Println("Odd elements of slice are: ", odd)  //打印 1 3 5 7
+	even := filter(slice, isEven)  // 函数当做值来传递了
+	fmt.Println("Even elements of slice are: ", even) //打印2 4
+}
+```
+
+那么，我们又为什么要将一个函数作为参数传入另一个函数呢？ 其实主要是用作编写一些通用的函数接口，在可以将函数当做参数传入时，会让编程非常灵活和方便。
+
+此外，也可以不将函数声明成为一种类型再进行参数传递，直接就在函数的传入参数处写该函数的类型，例如将上面的代码可以改为：
+
+```go
+func filter(slice []int, f func(int) bool) []int { // 这里的f就是函数，作为值传入该函数
+	var result []int
+	for _, value := range slice {
+		if f(value) {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+```
+
+#### Panic和Recover

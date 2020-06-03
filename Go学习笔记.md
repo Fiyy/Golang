@@ -747,3 +747,79 @@ func main() {
 
 在外层struct中的同名method会直接重写，如果直接用`.+函数名`的话只会调用外层的method，但是如果想调用成员结构对应的method，也可以通过`.structtype.methodname()`来调用，go语言的继承关系十分简单。
 
+### 2.6 interface接口
+
+既然提到了面向对象，那么就一定有`interface`。
+
+什么是`interface`，学过Java的话很好解释，在Java中是一系列抽象方法的集合，`interface`本身就是一个抽象的概念。在go中，其实没有什么区别，但是由于go里并没有抽象方法的概念，`interface`就是一系列`method`的集合。
+
+`interface`和是用`type`进行声明的，`interface`内的函数不需要写函数体，只用写函数名和参数，如下：
+
+```go
+type YoungChap interface {
+	SayHi()
+	Sing(song string)
+	BorrowMoney(amount float32)
+}
+```
+
+任何类型都实现了空interface——`interface{}`。
+
+那么`interface`到底能怎么用呢？它可以作为一个变量的类型吗？这个变量又能怎么用？
+
+`interface`可以作为变量，也可以赋值，其实这里的`interface`用法和Java中的基本相同，只是Java要使用`interface`，必须在一个类的声明中说明`implements`了一个`interface`，但是在go中，完全不需要，`struct`就是`struct`，如果它实现（implement）了一个`interface`，会自动识别，而不需要你自己手动说明。
+
+如果没学过Java或者C++，这里肯定疑惑，一个`struct`怎么才算`implements`了这个`interface`呢？其实很简单，就是这个`struct`用`method`实现了所有`interface`中声明到的函数。Show you the code：
+
+```go
+type Human struct {
+	name string
+	age int
+	phone string
+}
+func (h Human) SayHi() {
+	fmt.Printf("Hi, I am %s you can call me on %s\n", h.name, h.phone)
+}
+//Human实现Sing方法
+func (h Human) Sing(lyrics string) {
+	fmt.Println("La la la la...", lyrics)
+}
+type Men interface {
+	SayHi()
+	Sing(lyrics string)
+}
+```
+
+毫无疑问，这里的`struct` Human实现了 `interface` Men。
+
+用一个`interface`声明一个变量，这个变量可以存储一切实现了这个`interface`的`struct`变量，接上一个例子，我们可以这么写：
+
+```
+type Human struct {
+	name  string
+	age   int
+	phone string
+}
+
+func (h Human) SayHi() {
+	fmt.Printf("Hi, I am %s you can call me on %s\n", h.name, h.phone)
+}
+
+//Human实现Sing方法
+func (h Human) Sing(lyrics string) {
+	fmt.Println("La la la la...", lyrics)
+}
+
+type Men interface {
+	SayHi()
+	Sing(lyrics string)
+}
+
+func main() {
+
+	var men Men = Human{"kingyzhang", 21, "110"}
+	men.SayHi
+	men.Sing("zy")
+}
+```
+

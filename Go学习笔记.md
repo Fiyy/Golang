@@ -623,6 +623,7 @@ p.name = "asdfad"
 p.age = 4
 // 还可以这么声明
 var p person = person{"asd", 4}
+var p = person{"asd",4}
 ```
 
 如果是在函数内部，还可以使用其他声明方式：
@@ -639,4 +640,54 @@ var p person = person{"asd", 4}
   P := person{age:24, name:"Tom"}
   ```
 
-- 
+- 可以使用`new`来分配一个指针，注意这里的返回值是指针
+
+  ```go
+  P := new(person)
+  ```
+
+`struct`支持匿名字段，其实就是结构内的某一个成员允许是匿名的，在结构声明时只说明其类型，不起变量名称，这样会自动将匿名成员嵌入该结构中，例如，如果匿名字段是一个struct时，这个内层struct（元素）的所有成员都默认引入到了外层结构中，直接看代码更直观：
+
+```go
+type Human struct {
+	name string
+	age int
+	weight int
+}
+
+type Student struct {
+	Human  // 匿名字段，那么默认Student就包含了Human的所有字段
+	speciality string
+}
+
+func main() {
+	mark := Student{Human{"Mark", 25, 120}, "Computer Science"}
+	fmt.Println("His name is ", mark.name)
+	fmt.Println("His age is ", mark.age)
+	fmt.Println("His weight is ", mark.weight)
+	fmt.Println("His speciality is ", mark.speciality)
+
+    mark.speciality = "AI"
+	fmt.Println("Mark changed his speciality")
+	fmt.Println("His speciality is ", mark.speciality)
+	// 修改他的年龄信息
+	fmt.Println("Mark become old")
+	mark.age = 46
+	fmt.Println("His age is", mark.age)
+	// 修改他的体重信息
+	fmt.Println("Mark is not an athlet anymore")
+	mark.weight += 60
+	fmt.Println("His weight is", mark.weight)
+}
+```
+
+如果你学过C++或者Java，是不是感觉和继承有些类似？
+
+不止如此，其实student还可以直接访问它自己的`Human`结构,然后再用这个结构来访问`Human`结构中的成员，是怎么执行的呢？
+
+```
+mark.Human.name = "dasfd"
+```
+
+**注意：struct的指针可以直接使用`.` 来访问成员，这点很方便**
+

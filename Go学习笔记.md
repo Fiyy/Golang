@@ -523,3 +523,120 @@ func filter(slice []int, f func(int) bool) []int { // 这里的f就是函数，�
 ```
 
 #### Panic和Recover
+
+Go中没有异常机制，不能抛出异常，因此就使用`panic` 和`recover`机制。但是一定要谨慎使用，一般的代码应该不使用或者很少使用。
+
+**panic**
+
+> 是一个内建函数，可以中断原有的控制流程，进入一个`panic`状态中。当函数`F`调用`panic`，函数F的执行被中断，但是`F`中的延迟函数会正常执行，然后F返回到调用它的地方。在调用的地方，`F`的行为就像调用了`panic`。这一过程继续向上，直到发生`panic`的`goroutine`中所有调用的函数返回，此时程序退出。`panic`可以直接调用`panic`产生。也可以由运行时错误产生，例如访问越界的数组。
+
+**Recover**
+
+> 是一个内建的函数，可以让进入`panic`状态的`goroutine`恢复过来。**`recover`仅在延迟函数中有效**。**在正常的执行过程中，调用`recover`会返回`nil`，并且没有其它任何效果**。如果当前的`goroutine`陷入`panic`状态，调用`recover`可以捕获到`panic`的输入值，并且恢复正常的执行。
+
+panic 函数演示如下：
+
+```go
+var user = os.Getenv("USER")
+
+func init() {
+	if user == "" {
+		panic("no value for $USER")
+	}
+}
+```
+
+#### `main`函数和`init`函数
+
+- `init`函数能作用于所有的包，而`main`函数只能用于`main`包中。
+- 两个函数都没有参数值和返回值
+- 在每个package中可以写任意多个`init`函数，但是建议只写一个
+- `init`函数是可选的，main`函数在``main`包中是必须包含的
+- go程序会自动调用这两个函数
+- 程序的初始化和执行都起始于`main`包，一个包可能在多个包内都进行了`import`，但是实质上只会导入一次供所有包使用
+- 一个包被导入的时候，如果该包中还导入了其他包，会首先导入其他包，再对这些包的包级别常量和变量初始化，接着执行`init`函数（如果没有就不执行），等所有被导入的包都加载完了，再开始对`main`包中的包级常量和变量进行初始化，然后执行`main`包中的`init`函数，再执行`main`函数。具体过程如下图：
+
+![img](https://github.com/astaxie/build-web-application-with-golang/raw/master/zh/images/2.3.init.png?raw=true)
+
+#### import
+
+有两种常用模式的import：
+
+1. 相对路径
+2. 绝对路径
+
+还有部分是比较特殊的import方式：
+
+1. 点操作
+
+   ```go
+    import(
+        . "fmt"
+    )
+   ```
+
+   点操作的作用是在之后调用该包函数是可以省略掉包名，直接用函数，如：
+
+   ```go
+   fmt.Println(2)
+   Println(2)
+   ```
+
+   **注意: 这里要注意一点，在使用点操作引入包后，不能再使用fmt.xxxx函数，而是必须直接使用xxx函数，否则会出现错误，除非你再写一次不带点的导入操作**
+
+2. 别名操作
+
+   类似于import xxx as xxx，可以起一些简单的名字便于记忆
+
+   ```go
+    import(
+        f "fmt"
+    )
+   fmt.Println(2)
+   f.Println(2)
+   ```
+
+   **注意:在使用别名操作引入包后，不能再使用fmt.xxxx函数，而是必须使用x.xxx函数，否则会出现错误，除非你再写一次不带别名的导入操作**
+
+3. `_`操作
+
+   其实就是将一个包引入，但是其包名起别名为`_`，其实也就是不能用了，用了这个操作后，只是引入该包，但是不能主动调用该包内的函数，只是会程序自动调用该包内的`init`函数。
+
+   **注意:同理，不能再使用fmt.xxx了** 
+
+### 2.4 struct类型
+
+`struct`结构可以用`type`声明为类型
+
+```go
+type person struct {
+	name string
+	age int
+}
+```
+
+struct结构的成员可以用`.`访问和操作，struct对应变量的声明和普通变量相同，但是初始化有好几种方式
+
+```go
+var p person
+p.name = "asdfad"
+p.age = 4
+// 还可以这么声明
+var p person = person{"asd", 4}
+```
+
+如果是在函数内部，还可以使用其他声明方式：
+
+- 按照顺序提供初始值
+
+  ```go
+  p := person{"asfd",1}
+  ```
+
+- 按照`field:value`初始化
+
+  ```go
+  P := person{age:24, name:"Tom"}
+  ```
+
+- 

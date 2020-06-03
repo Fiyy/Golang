@@ -691,3 +691,59 @@ mark.Human.name = "dasfd"
 
 **注意：struct的指针可以直接使用`.` 来访问成员，这点很方便**
 
+### 2.5 面向对象
+
+go语言是面向对象语言吗？ 有一种回答是：是也不是。go语言中没有对象这个概念，但是struct起到了类似的作用。
+
+#### method
+
+是一种有接收者的函数，这里的接收者就是一个`struct`，`struct`可以使用`.`来对函数进行调用，而且**该函数可以使用该`struct`的成员**。这里的接收者可以为struct，也可以是内置类型，也可以是自定义的各种类型。其实就是和C++的类的成员函数类似。声明方法和使用方法如下：
+
+```go
+type Rectangle struct {
+	width, height float64
+}
+
+func (r *Rectangle) area() float64 {
+	return r.width * r.height
+}
+func main() {
+	rec := Rectangle{3, 4}
+	fmt.Println(rec.area())
+}
+```
+
+当然，为了实现相同的功能，你也可以不用`method`，直接将`rec`当作参数传入函数，实现方法如下：
+
+```go
+type Rectangle struct {
+	width, height float64
+}
+
+func area(r *Rectangle) float64 {
+	return r.width * r.height
+}
+func main() {
+	rec := Rectangle{3, 4}
+	fmt.Println(area(&rec))
+}
+```
+
+仔细思考，如果不使用`method`，会出现声明问题？
+
+如果不使用`method`只用简单的函数，这些函数不属于任何一个`struct`，是独立存在的。如果还要计算`cycle`和`tritangle`的面积怎么办？只能重新写函数，而且必须将函数的名字都改成不一样的，因为**go语言是不支持函数重载的**。
+
+如果使用method，其实是将一个函数限制在了一个`struct`的内部，这个函数仅供其`struct`使用，在这种情况下，其实不就实现了重载吗？尽管两个`method`名相同，但是它们分属于不同的`struct`，所以是不同的。
+
+**注意：在method中，如果使用类型作为接收者，method中的操作不能修改struct成员的值，但是如果接收者是指针，就能修改struct成员的值。而且要尽量多使用指针作为接收者，开销较小。**
+
+#### method的继承
+
+！！！匿名成员的method的方法也是可以继承的，直接继承到了外部结构中。
+
+当然，要是不是匿名成员的struct，直接就可以使用xxx.xxx.method()调用，自然也是继承了。
+
+但是着就出现了一个问题，如果一个struct要写自己的method，而这个method又和其成员结构体的一个method重名怎么办呢？
+
+在外层struct中的同名method会直接重写，如果直接用`.+函数名`的话只会调用外层的method，但是如果想调用成员结构对应的method，也可以通过`.structtype.methodname()`来调用，go语言的继承关系十分简单。
+

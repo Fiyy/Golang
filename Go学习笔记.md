@@ -898,3 +898,292 @@ p := reflect.ValueOf(&x)
 v := p.Elem()
 v.SetFloat(7.1)
 ```
+
+### 2.7 并发
+
+我终于终于学到并发了...
+
+#### goroutine
+
+`goroutine`是go并发编程的核心,其实就是协程，比线程更小，开销也更小，更易用、高效，go语言实现了协程之间的内存共享，可以共享同一进程内的数据。执行goroutine需要很少的栈内存（4~5kb）。
+
+`goroutine`通过关键字`go`实现，其实就是个普通的函数。
+
+```go
+import (
+	"fmt"
+	"runtime"
+)
+func say(s string) {
+	for i := 0; i < 5; i++ {
+		runtime.Gosched()
+		fmt.Println(s)
+	}
+}
+func main() {
+	go say("world") //开一个新的Goroutines执行
+	say("hello") //当前Goroutines执行
+}
+```
+
+上面的多个goroutine运行在同一个进程里面，共享内存数据，不过设计上我们要遵循：**不要通过共享来通信，而要通过通信来共享。**
+
+`runtime.Gosched()`表示让CPU把时间片让给别人,下次某个时候继续恢复执行该`goroutine`。
+
+在Go 1.5将标识并发系统线程个数的runtime.GOMAXPROCS的初始值由1改为了运行环境的CPU核数。
+
+在Go 1.5以前调度器仅使用单线程，也就是说只实现了并发(同一时间段内处理多个事件，并发是依靠划分时间片来实现)。想要发挥多核处理器的并行（同一事件点处理多个事件），需要在我们的程序中显式调用 runtime.GOMAXPROCS(n) 告诉调度器同时使用多个线程。GOMAXPROCS 设置了同时运行逻辑代码的系统线程的最大数量，并返回之前的设置。如果n < 1，不会改变当前设置。
+
+goroutine相比于线程，有个特点，那就是非抢占式，如果一个协程占据了线程，不主动释放或者没有发生阻塞的话，那么永远不会交出线程的控制权
+
+***Go里的子协程会随着主协程的结束而结束，注意这里是主协程和子协程，要是在主协程中go一个协程，在这个协程里go一个子协程，而父协程挂掉了，子协程是不会跟着挂掉的，父协程是不会影响子协程的，只有主协程会影响子协程。***
+
+#### channels
+
+Go语言使用channel进行数据的通信，类似双向通道，可以进行接收和发送。通信时候只能使用特定的类型：channel类型。定义channel类型时要规定发送到channel的值的类型，而且channel必须使用make来创建，如下：
+
+```go
+ci := make(chan int)
+cs := make(chan string)
+cf := make(chan interface{})
+```
+
+channel用符号`<-`来接收和发送数据
+
+```go
+ci <- v    // 发送v到channel ch.
+v := <-ci  // 从ch中接收数据，并赋值给v
+```
+
+默认情况下，channel的接收和发送数据是阻塞的，没有数据会自然阻塞，除非另一端已经准备好数据，或者channel中已经有了一个数据，它的写入数据就是阻塞的，直到有goruntine将这个channel中的数据读取，所以就不需要显式的锁进行控制，普通的channel就是一个缓冲区大小为1的channel。
+
+***不管是哪种类型的channel，在当做函数参数传递时都是传引用，类似的还有slice***
+
+#### Buffered channels
+
+上面的channel是无需指定缓存区大小的channel，我们也可以在`make`时设置channel的缓冲区大小。当channel中存储满时，如果再需要继续向缓冲区添加数据，就会阻塞协程，直到其它goruntine在channel读走一些元素，腾出空间。
+
+创建方式如下，只是`make`函数中添加了一个数值
+
+```go
+ch := make(chan type, value)
+```
+
+如果value的值为0，那么就是无缓冲阻塞的`channel`，相当于没有写value。当value是1的话，其实也是无缓冲阻塞？（基于目前的理解是这样的）当value>1时，是有缓冲但是非阻塞的，直到写满整个缓冲区才是阻塞写入。
+
+#### Range和close
+
+为了方便对channel进行操作，go中支持用`for`和`range`来操作channel，就像slice和map一样。
+
+`close`函数可以关闭通道，关闭后不可以再次使用。
+
+```go
+func test(n int, c chan int) {
+	for i := 0; i < n; i++ {
+		c <- i
+	}
+	close(c)
+}
+
+func main() {
+	c := make(chan int, 10)
+	go test(cap(c), c)
+	for i := range c {
+		fmt.Println(i)
+	}
+}
+```
+
+可以通过下面的语法测试channel是否被关闭。
+
+```go
+v, ok := <- ch
+```
+
+关闭以后ok的返回值为`false`，v的返回值为零值。
+
+如果channel没有关闭而且缓冲区内有值，v返回一个值，ok为`true`。
+
+> 记住应该在生产者的地方关闭channel，而不是消费的地方去关闭它，这样容易引起panic
+
+> 另外记住一点的就是channel不像文件之类的，不需要经常去关闭，只有当你确实没有任何发送数据了，或者你想显式的结束range循环之类的
+
+#### Select
+
+如果有多个channel存在，我们怎么在多个goroutine中进行操作？可以使用`select`关键字进行操作，它可以监听`channel`上的数据流动。
+
+`select`是一个类似`switch`的语法，`case` 中的值是对`channel`的操作语句，如下，`c`和`quit`是两个`channel`：
+
+```go
+select {
+		case c <- x:
+    		//
+		case <-quit:
+			//
+		}
+```
+
+如果`case`的操作语句不是阻塞的可以执行，就在**多个可执行的`channel`操作中随机挑选一个进行执行（这里的随机挑选，心存疑惑，下文会用一个例子说明我为什么疑惑）**。如果所有`case`中的`channel`操作都是阻塞的，且没有`default`块，那么`select`也会阻塞，直到等到一个非阻塞可以执行的`case`，选择这个`case`执行。如果所有`case`的`channel`读取都是阻塞的，且包含`default`块，那么会直接默认执行`default`块，`select`不再阻塞等待`channel`。
+
+我们来看一个例子：
+
+```go
+func test(c, quit chan int) {
+	num := 0
+	for {
+		num++
+		select {
+		case c <- num:
+			fmt.Println("num is a", num)
+		case <-quit:
+			fmt.Println("num is b", num)
+			fmt.Println("quit")
+			return
+		}
+	}
+}
+func main() {
+	c := make(chan int)
+	quit := make(chan int)
+	go func() {
+		for i := 0; i < 10; i++ {
+			fmt.Println(<-c)
+		}
+		quit <- 0
+	}()
+	test(c, quit)
+}
+/* 执行结果为
+1
+num is a 1
+num is a 2
+2
+3
+num is a 3
+num is a 4
+4
+5
+num is a 5
+num is a 6
+6
+7
+num is a 7
+num is a 8
+8
+9
+num is a 9
+num is a 10
+10
+num is b 11
+quit
+*/
+```
+
+由于`quit`没有值传入，一直是阻塞状态，所以select每次都选择执行`case c <- num:`，当匿名函数里的`for`循环结束后，`c`为空，`quit`也是为空的，而`quit`马上就要传入一个数据`0`。这里可以分为两种情况，`test`函数中再次循环到`select`块，此时`quit`为空或者不为空，具体是哪种情况，和计算机的运行速度有关，我并不i清楚，所以依次分析两种情况：
+
+- 如果`quit`为空，有意思的就来了，还应该继续执行`case c <- num:`语句块中的内容，输出结果就不是上面的了，应该有一个`num is a 11`，还没有结束，不管之后计算机的运行速度如何，`c`中的数据都无法读取了，其写入状态始终阻塞，直至程序结束，所以即使test的for又一次循环，也不会再次执行`case c <- num:`语句块,而是等待匿名函数中运行到`quit <- 0`，select选择`case <-quit:`语句块执行，这时`num = 12`，应该打印`num is b 12`和`quit`
+
+  最终的打印结果为：
+
+  ```
+  /* 执行结果为
+  1
+  num is a 1
+  num is a 2
+  2
+  3
+  num is a 3
+  num is a 4
+  4
+  5
+  num is a 5
+  num is a 6
+  6
+  7
+  num is a 7
+  num is a 8
+  8
+  9
+  num is a 9
+  num is a 10
+  10
+  num is a 11
+  num is b 12
+  quit
+  */
+  ```
+
+- 如果`quit`不为空，那么就要由`select`选择了，如果选了`case c <- num:`，和上一种情况完全相同，但是如果选了`case <-quit:`，就比较简单了，就是前面代码下的输出结果，也就是执行时候每次出现的结果。
+
+但是很奇怪，为什么每次都是这种执行结果？
+
+为了排除是数据不够大的原因，在代码中加入延时，如下：
+
+```go
+func test(c, quit chan int) {
+	num := 0
+	for {
+		num++
+		select {
+		case c <- num:
+			fmt.Println("num is a", num)
+		case <-quit:
+			fmt.Println("num is b", num)
+			fmt.Println("quit")
+			return
+		}
+	}
+}
+func main() {
+	c := make(chan int)
+	quit := make(chan int)
+	go func() {
+		for i := 0; i < 10; i++ {
+			fmt.Println(<-c)
+		}
+        time.Sleep(time.Duration(5)*time.Second)
+		quit <- 0
+	}()
+	test(c, quit)
+}
+```
+
+在匿名函数的goroutine中，如果执行到`quit <- 0`这一步，需要等待五秒，而这时test函数所在的runtine，早应该完成了上一次循环，再次来到select处，这时的`c`通道仍然是空的，应该可以执行 `c <- num`，但是为什么这没有执行，而是等待五秒后执行`case <-quit:`代码块。
+
+在好奇之下，我稍稍修改了下代码：
+
+```go
+func test(c, quit chan int) {
+	num := 0
+	for {
+		num++
+		select {
+		case <-quit:
+			fmt.Println("num is b", num)
+			fmt.Println("quit")
+			return
+		case c <- num:
+			fmt.Println("num is a", num)
+		}
+	}
+}
+
+func main() {
+	c := make(chan int)
+	quit := make(chan int)
+	go func() {
+		for i := 0; i < 10; i++ {
+			fmt.Println(<-c)
+			quit <- 0
+		}
+	}()
+	test(c, quit)
+}
+```
+
+- 仔细研究一下死锁检测的时间
+
+```
+
+```
+

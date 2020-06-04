@@ -763,11 +763,11 @@ type YoungChap interface {
 }
 ```
 
-任何类型都实现了空interface——`interface{}`。
-
 那么`interface`到底能怎么用呢？它可以作为一个变量的类型吗？这个变量又能怎么用？
 
 `interface`可以作为变量，也可以赋值，其实这里的`interface`用法和Java中的基本相同，只是Java要使用`interface`，必须在一个类的声明中说明`implements`了一个`interface`，但是在go中，完全不需要，`struct`就是`struct`，如果它实现（implement）了一个`interface`，会自动识别，而不需要你自己手动说明。
+
+> "当看到一只鸟走起来像鸭子、游泳起来像鸭子、叫起来也像鸭子，那么这只鸟就可以被称为鸭子"。
 
 如果没学过Java或者C++，这里肯定疑惑，一个`struct`怎么才算`implements`了这个`interface`呢？其实很简单，就是这个`struct`用`method`实现了所有`interface`中声明到的函数。Show you the code：
 
@@ -794,32 +794,107 @@ type Men interface {
 
 用一个`interface`声明一个变量，这个变量可以存储一切实现了这个`interface`的`struct`变量，接上一个例子，我们可以这么写：
 
-```
-type Human struct {
-	name  string
-	age   int
-	phone string
-}
-
-func (h Human) SayHi() {
-	fmt.Printf("Hi, I am %s you can call me on %s\n", h.name, h.phone)
-}
-
-//Human实现Sing方法
-func (h Human) Sing(lyrics string) {
-	fmt.Println("La la la la...", lyrics)
-}
-
-type Men interface {
-	SayHi()
-	Sing(lyrics string)
-}
-
+```go
 func main() {
 
 	var men Men = Human{"kingyzhang", 21, "110"}
-	men.SayHi
+	men.SayHi()
 	men.Sing("zy")
 }
 ```
 
+这里有一个要注意的地方：通过`interface`声明的变量，虽然赋值了实现该`interface`的`struct`变量，但是通过这个`interface`变量只能调用`interface`中有的方法，不能调用`struct`其他的成员变量或者`method`。例如在上面的例子中，这么写就会报错：
+
+```go
+men.age
+```
+
+因为`Men`这个借口中没有age变量，虽然这个`men`实际指向一个`Human`结构。
+
+任何类型都实现了空interface——`interface{}`，所以空的`interface`可以存储任何类型的值，可以作为参数或者返回值，是不是有点类似`Object`。
+
+如果一个类型实现了`string()`方法，就是实现了`fmt.Stringer`接口，能用``Println`进行打印。
+
+如果一个类型实现了`Error() string`方法，就是实现了`fmt.error`接口，能用``Println`打印`xxx.Error()`进行打印。
+
+#### interface变量存储的类型
+
+如果想知道`interface`变量中到底存储了什么类型的变量，有两种方法：
+
+- Comma-ok 断言
+
+  value, ok = element.(T)，这里value就是变量的值，ok是一个bool类型，element是interface变量，T是断言的类型。
+
+  如果element里面确实存储了T类型的数值，那么ok返回true，value返回element中存储的值，否则ok返回false，value中返回零值。**注意：这里value返回的零值是相对T类型而言的。**
+
+  使用Comma-ok断言多用于if-else语句。
+
+- switch测试
+
+  直接看代码：
+
+  ```go
+  switch value := element.(type) {
+  	case int:
+  		xxx
+  	case string:
+  		xxx
+  	case Person:
+  		xxx
+  	default:
+  		xxx
+  }
+  ```
+
+  **注意：`element.(type)`这个语法只能在switch中使用，在switch外就只能使用Comma-ok语法**
+
+#### 嵌入interface
+
+`interface`可以隐式的嵌入另一个`interface`，这一点类似于`struct`的继承，如下：
+
+```go
+type stack interface {
+	Interface //嵌入字段Interface
+	Push(x interface{}) 
+	Pop() interface{} 
+}
+type Interface interface{
+    sing()
+    song()
+}
+```
+
+#### 反射
+
+反射就是能检测程序运行时的状态，一般用到包`reflect`。
+
+如果要反射一个类型的值，首先要将它转化成一个`reflect`对象（reflect.Type或者reflect.Value）
+
+```go
+t := reflect.TypeOf(i)    //得到类型的元数据,通过t我们能获取类型定义里面的所有元素
+v := reflect.ValueOf(i)   //得到实际的值，通过v我们获取存储在里面的值，还可以去改变值
+```
+
+转化为reflect对象之后我们就可以进行一些操作了，也就是将reflect对象转化成相应的值，例如
+
+```go
+tag := t.Elem().Field(0).Tag  //获取定义在struct里面的标签
+name := v.Elem().Field(0).String()  //获取存储在第一个字段里面的值
+```
+
+最后，反射的话，那么反射的字段必须是可修改的，前面学习过传值和传引用，这个里面也是一样的道理。反射的字段必须是可读写的意思是，如果下面这样写，那么会发生错误
+
+```go
+var x float64 = 3.4
+v := reflect.ValueOf(x)
+v.SetFloat(7.1)
+```
+
+如果要修改相应的值，必须这样写
+
+```go
+var x float64 = 3.4
+p := reflect.ValueOf(&x)
+v := p.Elem()
+v.SetFloat(7.1)
+```

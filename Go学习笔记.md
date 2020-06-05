@@ -955,13 +955,37 @@ ci <- v    // 发送v到channel ch.
 v := <-ci  // 从ch中接收数据，并赋值给v
 ```
 
-默认情况下，channel的接收和发送数据是阻塞的，没有数据会自然阻塞，除非另一端已经准备好数据，或者channel中已经有了一个数据，它的写入数据就是阻塞的，直到有goruntine将这个channel中的数据读取，所以就不需要显式的锁进行控制，普通的channel就是一个缓冲区大小为1的channel。
+默认情况下，channel的接收和发送数据是阻塞的。普通channel的接收和发送是同步的，必须同时进行，否则就阻塞准备好的一方。什么意思呢？除非发送和接收双方都是ready，否则channel的两端都是阻塞的，直到双方都ready才进行数据的发送和接收。channel顾名思义就是通道，你可以将这里的channel想象成一个没有存储空间的通道，其内部不能存储任何数据，只起到连接发送方和接收方的作用，那必然就要求双方都准备好才能传输。我们来看一个例子就明白了：
 
-***不管是哪种类型的channel，在当做函数参数传递时都是传引用，类似的还有slice***
+```go
+func main() {
+        ch := make(chan int)
+        ch <- 1		//1
+        y := <-ch	//2
+        fmt.Println(y) 
+        close(ch)
+}
+```
+
+运行程序发现死锁，为什么？因为这是一个普通的同步channel，在执行到代码1处时，只有传入数据，协程内部语句是顺序执行的，所以程序并没有运行到代码2，它认为此刻接收数据的载体没有准备好，而channel不能存储数据，所以程序阻塞到了代码1处，永远也无法运行到代码2，程序死锁。
+
+我们完全可以另外开启一个协程来接收数据，这样就不会死锁了，当然，还有一种方法，就是使用后文说的异步channel，也叫buffered channel，它是可以存储数据的，我们将代码改为：
+
+```go
+func main() {
+	ch := make(chan int, 1)
+	ch <- 1   //1
+	y := <-ch //2
+	fmt.Println(y)
+	close(ch)
+}
+```
+
+发现不再死锁，我们就来看一看Buffered channels。
 
 #### Buffered channels
 
-上面的channel是无需指定缓存区大小的channel，我们也可以在`make`时设置channel的缓冲区大小。当channel中存储满时，如果再需要继续向缓冲区添加数据，就会阻塞协程，直到其它goruntine在channel读走一些元素，腾出空间。
+上面讲的channel是无需指定缓存区大小的channel，因为它是同步的，channel缓存区大小本来就是0。对于异步的buffered channel，我们也可以在`make`时设置channel的缓冲区大小。当channel中存储满时，如果再需要继续向缓冲区添加数据，就会阻塞协程，直到其它goruntine在channel读走一些元素，腾出空间。如果channel的缓存为空时，如果要读取数据，就会阻塞，直到有数据传入。
 
 创建方式如下，只是`make`函数中添加了一个数值
 
@@ -969,7 +993,11 @@ v := <-ci  // 从ch中接收数据，并赋值给v
 ch := make(chan type, value)
 ```
 
-如果value的值为0，那么就是无缓冲阻塞的`channel`，相当于没有写value。当value是1的话，其实也是无缓冲阻塞？（基于目前的理解是这样的）当value>1时，是有缓冲但是非阻塞的，直到写满整个缓冲区才是阻塞写入。
+如果value的值为0，那么就是无缓冲的同步`channel`，相当于没有写value。不为0，就是buffered channel，可存储。
+
+下文中因为最初没有正确理解同步和异步channel之间的区别，误以为同步channel也是一个缓冲区大小为1的异步buffered channel，所以产生来不少错误的理解，闹了笑话，具体见后文。
+
+***不管是哪种类型的channel，在当做函数参数传递时都是传引用，类似的还有slice***
 
 #### Range和close
 
@@ -1079,6 +1107,10 @@ quit
 */
 ```
 
+**注意！注意！注意！以下的内容都是当时当做缓冲区大小为1的buffered channel分析的**
+
+---
+
 由于`quit`没有值传入，一直是阻塞状态，所以select每次都选择执行`case c <- num:`，当匿名函数里的`for`循环结束后，`c`为空，`quit`也是为空的，而`quit`马上就要传入一个数据`0`。这里可以分为两种情况，`test`函数中再次循环到`select`块，此时`quit`为空或者不为空，具体是哪种情况，和计算机的运行速度有关，我并不i清楚，所以依次分析两种情况：
 
 - 如果`quit`为空，有意思的就来了，还应该继续执行`case c <- num:`语句块中的内容，输出结果就不是上面的了，应该有一个`num is a 11`，还没有结束，不管之后计算机的运行速度如何，`c`中的数据都无法读取了，其写入状态始终阻塞，直至程序结束，所以即使test的for又一次循环，也不会再次执行`case c <- num:`语句块,而是等待匿名函数中运行到`quit <- 0`，select选择`case <-quit:`语句块执行，这时`num = 12`，应该打印`num is b 12`和`quit`
@@ -1150,7 +1182,11 @@ func main() {
 
 在匿名函数的goroutine中，如果执行到`quit <- 0`这一步，需要等待五秒，而这时test函数所在的runtine，早应该完成了上一次循环，再次来到select处，这时的`c`通道仍然是空的，应该可以执行 `c <- num`，但是为什么这没有执行，而是等待五秒后执行`case <-quit:`代码块。
 
-在好奇之下，我稍稍修改了下代码：
+---
+
+**错误分析如上，其实所有的问题都出在了没有把channel的概念理解清楚，误认为channel就是buffer区大小为1的buffered channel，现在按照正确的概念理解，程序输出毫无问题，之前的错误真是脑瘫。**
+
+然后我们将程序里的同步的channel改成之前心心念念的异步buffered channel，看看输出结果：
 
 ```go
 func test(c, quit chan int) {
@@ -1167,23 +1203,92 @@ func test(c, quit chan int) {
 		}
 	}
 }
-
 func main() {
-	c := make(chan int)
-	quit := make(chan int)
+	c := make(chan int, 1)
+	quit := make(chan int, 1)
 	go func() {
 		for i := 0; i < 10; i++ {
 			fmt.Println(<-c)
-			quit <- 0
 		}
+		quit <- 0
 	}()
 	test(c, quit)
 }
+/* 输出结果
+num is a 1
+1
+2
+num is a 2
+num is a 3
+num is a 4
+3
+4
+5
+num is a 5
+num is a 6
+num is a 7
+6
+7
+8
+num is a 8
+num is a 9
+num is a 10
+9
+10
+num is a 11
+num is b 12
+quit
+*/
 ```
 
-- 仔细研究一下死锁检测的时间
+看输出结果，哦豁，这不就是之前错误分析时候心心念念的结果吗？至此，这个问题也就终结了。
 
+#### 超时
+
+有时会发生死锁，全部goruntine阻塞，应该如何解决？我们可以用select设置一个超时选项，实现如下：
+
+```go
+func main() {
+	c := make(chan int)
+	o := make(chan bool)
+	go func() {
+		for {
+			select {
+			case v := <-c:
+				println(v)
+			case <-time.After(time.Second):
+				println("timeout")
+				o <- true
+				break
+			}
+		}
+	}()
+	fmt.Println(<-o)
+}
 ```
 
-```
+如果在select中阻塞一定时间后，自然跳入超时代码块。
 
+#### runtime goroutine
+
+runtime包中有几个处理goroutine的函数：
+
+- Goexit
+
+  退出当前执行的goroutine，但是defer函数还会继续调用
+
+- Gosched
+
+  让出当前goroutine的执行权限，调度器安排其他等待的任务运行，并在下次某个时候从该位置恢复执行。
+
+- NumCPU
+
+  返回 CPU 核数量
+
+- NumGoroutine
+
+  返回正在执行和排队的任务总数
+
+- GOMAXPROCS
+
+  用来设置可以并行计算的CPU核数的最大值，并返回之前的值。

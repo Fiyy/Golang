@@ -91,6 +91,9 @@
   通过命令在命令行执行 godoc -http=:端口号 比如`godoc -http=:8080`。然后在浏览器中打开`127.0.0.1:8080`，你将会看到一个golang.org的本地copy版本，通过它你可以查询pkg文档等其它内容。如果你设置了GOPATH，在pkg分类下，不但会列出标准包的文档，还会列出你本地`GOPATH`中所有项目的相关文档，这对于经常被墙的用户来说是一个不错的选择。
 
 - go version 查看go当前的版本
+
 - go env 查看当前go的环境变量
+
 - go list 列出当前全部安装的package
-- go run 编译并运行Go程序
+
+- go run 编译并运行Go程序  
